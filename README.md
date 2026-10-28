@@ -32,7 +32,7 @@ line to open that file at that line with its changes expanded.
 
 | Command | What it does |
 | --- | --- |
-| `:sap-picker` | Changed files in Helix's picker (`~ path  +3 -1`), each previewed as its diff against `HEAD`; enter opens the file at its first change, expanded. Falls back to `:sap-changes` without canopy's picker patch |
+| `:sap-picker` | Changed files in Helix's picker (`~ path  +3 -1`), each previewed as its diff against `HEAD`; enter opens the file at its first change, expanded. Falls back to `:sap-changes` without dna.hx's picker patch |
 | `:sap-changes` | Every change in the repository against `HEAD`, in one buffer; enter opens the file at that line |
 | `:sap-toggle` | Expand the focused file's changes in place, or hide them |
 | `:sap-preview` | Expand only the hunk under the cursor (toggle) |
@@ -49,9 +49,10 @@ hunks.
   `steel-event-system`), see its
   [STEEL.md](https://github.com/mattwparas/helix/blob/steel-event-system/STEEL.md).
 - The virtual-text and picker APIs from
-  [canopy.hx](https://github.com/vitaliikindrat/canopy.hx)
+  [dna.hx](https://github.com/vitaliikindrat/dna.hx)
   (`helix-virtual-text.patch`, `helix-picker.patch`) applied to that build.
-  Without them sap loads, `:sap-changes` and the hunk actions work, the
+  The theme patch (`helix-theme.patch`) is optional, for colours inherited
+  from any theme. Without the others sap loads, `:sap-changes` and the hunk actions work, the
   picker falls back to the changes buffer, and the in-place views say what
   is missing.
 - `git` on `PATH`.
@@ -67,7 +68,7 @@ forge pkg install --git https://github.com/vitaliikindrat/sap.hx.git
 With Nix, the flake exposes `packages.<system>.sap` (with
 `passthru.cogName = "sap"` for
 [helix-plugins-nix](https://github.com/maxschipper/helix-plugins-nix)); take
-the patch from canopy.hx.
+the patch from dna.hx.
 
 Then in `~/.config/helix/init.scm`:
 
@@ -91,6 +92,11 @@ Then in `~/.config/helix/init.scm`:
 | --- | --- |
 | `ui.virtual.diff.minus` | background of removed rows (text uses `diff.minus`) |
 | `ui.virtual.diff.plus` | background of added and changed lines |
+
+No theme has these, so with dna.hx's theme patch sap inherits them: a fifth
+of the theme's `diff.minus` / `diff.plus` (the gutter's colours) over its
+background, worked out again whenever the theme changes. A theme that sets
+them keeps its own:
 
 ```toml
 "ui.virtual.diff.minus" = { bg = "#3b1d22" }

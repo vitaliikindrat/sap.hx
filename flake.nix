@@ -19,7 +19,7 @@
       packages = forAll (pkgs: rec {
         # The cog, laid out the way helix-plugins-nix and forge expect;
         # `passthru.cogName` lets helix-plugins-nix's module install it.
-        # Needs a Steel helix with canopy.hx's virtual-text patch.
+        # Needs a Steel helix with dna.hx's virtual-text patch.
         sap = pkgs.stdenvNoCC.mkDerivation {
           pname = "helix-plugin-sap";
           inherit version;
