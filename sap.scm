@@ -28,7 +28,8 @@
 (require-builtin steel/process)
 (require "util.scm")
 
-(provide sap-changes
+(provide sap-picker
+         sap-changes
          sap-goto
          sap-toggle
          sap-preview
@@ -276,6 +277,115 @@
                 (when (and hunks (not (null? hunks)) (vt-available?)) (show! opened hunks)))))))))
 
 (keymap (buffer *panel-label*) (normal (ret ":sap-goto")))
+
+;;;; the changed-files picker
+
+;; Helix's picker with our own rows needs canopy's custom-picker (a global).
+(define custom-picker-fn
+  (with-handler (lambda (_) #f) (eval-string "custom-picker")))
+
+;; `git status --porcelain` -> list of (kind . path), kind one of
+;; "modified" "added" "deleted" "renamed" "untracked" "conflict".
+(define (changed-files top)
+  (filter-map
+   (lambda (line)
+     (and (> (string-length line) 3)
+          (let* ([xy (substring line 0 2)]
+                 [path (substring line 3 (string-length line))]
+                 ;; "R  old -> new": keep the new name
+                 [path (let ([parts (split-many path " -> ")])
+                         (if (null? (cdr parts)) path (cadr parts)))]
+                 [kind (cond
+                         [(equal? xy "??") "untracked"]
+                         [(string-contains? xy "U") "conflict"]
+                         [(string-contains? xy "R") "renamed"]
+                         [(string-contains? xy "D") "deleted"]
+                         [(string-contains? xy "A") "added"]
+                         [else "modified"])])
+            (cons kind path))))
+   (split-lines (ok-or (git-run top (list "status" "--porcelain")) ""))))
+
+(define (filter-map f lst)
+  (let loop ([lst lst] [acc '()])
+    (if (null? lst)
+        (reverse acc)
+        (let ([v (f (car lst))]) (loop (cdr lst) (if v (cons v acc) acc))))))
+
+(define kind-sign
+  (hash "modified" "~" "added" "+" "deleted" "-" "renamed" ">" "untracked" "?" "conflict" "x"))
+
+;; A file's diff against HEAD (untracked: against nothing), as text.
+(define (file-diff top kind path)
+  (ok-or (if (equal? kind "untracked")
+             (git-run top (list "diff" "--no-index" "--no-color" "--" "/dev/null" path))
+             (git-run top (list "diff" "HEAD" "--no-color" "--no-ext-diff" "--" path)))
+         ""))
+
+(define (diff-stats text)
+  (let loop ([lines (split-lines text)] [plus 0] [minus 0])
+    (cond
+      [(null? lines) (cons plus minus)]
+      [(starts-with? (car lines) "+++") (loop (cdr lines) plus minus)]
+      [(starts-with? (car lines) "---") (loop (cdr lines) plus minus)]
+      [(starts-with? (car lines) "+") (loop (cdr lines) (+ plus 1) minus)]
+      [(starts-with? (car lines) "-") (loop (cdr lines) plus (+ minus 1))]
+      [else (loop (cdr lines) plus minus)])))
+
+;; The first new-file line the diff touches, to land on.
+(define (first-changed-line text)
+  (let ([hunks (cdr (parse-diff text))])
+    (if (null? hunks) 1 (max 1 (hash-ref (car hunks) 'new-start)))))
+
+;;@doc
+;; Changed files in Helix's picker, each previewed as its diff against HEAD;
+;; enter opens the file at its first change with the changes expanded
+(define (sap-picker)
+  (let* ([path (doc-path (focused))]
+         [top (toplevel (if path (dir-of path) (helix-find-workspace)))])
+    (cond
+      [(not top) (status "not in a git work tree")]
+      [(not (function? custom-picker-fn)) (sap-changes)] ; no canopy picker: the buffer view
+      [else
+       (let ([files (changed-files top)])
+         (if (null? files)
+             (status "no changes")
+             (let* ([dir (string-append (tmp-dir) "/picker")]
+                    [_ (unless (path-exists? dir) (with-handler (lambda (_) void) (create-directory! dir)))]
+                    [rows (let loop ([files files] [i 0] [acc '()])
+                            (if (null? files)
+                                (reverse acc)
+                                (let* ([kind (car (car files))]
+                                       [p (cdr (car files))]
+                                       [text (file-diff top kind p)]
+                                       [stats (diff-stats text)]
+                                       [preview (string-append dir "/" (number->string i) ".diff")])
+                                  (write-file! preview text)
+                                  (loop (cdr files) (+ i 1)
+                                        (cons (list (string-append (hash-ref kind-sign kind) " " p
+                                                                   "  +" (number->string (car stats))
+                                                                   " -" (number->string (cdr stats)))
+                                                    preview
+                                                    p
+                                                    (first-changed-line text)
+                                                    kind)
+                                              acc)))))])
+               (push-component!
+                (custom-picker-fn
+                 "changes"
+                 (map car rows)
+                 (map cadr rows)
+                 (lambda (index)
+                   (let ([row (list-ref rows index)])
+                     (if (equal? (list-ref row 4) "deleted")
+                         (status (string-append (list-ref row 2) " is deleted"))
+                         (begin
+                           (helix.open (string-append top "/" (list-ref row 2)))
+                           (helix.goto (number->string (list-ref row 3)))
+                           (helix.static.align_view_center)
+                           (let ([doc (focused)])
+                             (when (and (vt-available?) (not (hash-try-get *inline* (doc-id->usize doc))))
+                               (let ([hunks (buffer-hunks doc)])
+                                 (when (and hunks (not (null? hunks))) (show! doc hunks))))))))))))))])))
 
 ;;;; hooks
 
