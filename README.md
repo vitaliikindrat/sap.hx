@@ -9,6 +9,12 @@ The model is [gitsigns.nvim](https://github.com/lewis6991/gitsigns.nvim) in
 the buffer and [diffview.nvim](https://github.com/sindrets/diffview.nvim)'s
 file panel, kept small.
 
+![changed files in Helix's picker, the diff as the preview](docs/picker.png)
+
+`space g` is Helix's own picker with your changed files, each previewed as
+its diff against `HEAD`. Enter opens the file at its first change with the
+changes expanded:
+
 ![changes expanded in place](docs/inline.png)
 
 Helix's gutter shows *where* lines changed. sap shows *what*: removed lines
@@ -26,6 +32,7 @@ line to open that file at that line with its changes expanded.
 
 | Command | What it does |
 | --- | --- |
+| `:sap-picker` | Changed files in Helix's picker (`~ path  +3 -1`), each previewed as its diff against `HEAD`; enter opens the file at its first change, expanded. Falls back to `:sap-changes` without canopy's picker patch |
 | `:sap-changes` | Every change in the repository against `HEAD`, in one buffer; enter opens the file at that line |
 | `:sap-toggle` | Expand the focused file's changes in place, or hide them |
 | `:sap-preview` | Expand only the hunk under the cursor (toggle) |
@@ -41,9 +48,11 @@ hunks.
 - Helix built from the Steel branch (`mattwparas/helix`,
   `steel-event-system`), see its
   [STEEL.md](https://github.com/mattwparas/helix/blob/steel-event-system/STEEL.md).
-- The virtual-text API from [canopy.hx](https://github.com/vitaliikindrat/canopy.hx)
-  (`helix-virtual-text.patch`) applied to that build. Without it sap loads,
-  `:sap-changes` and the hunk actions work, and the in-place views say what
+- The virtual-text and picker APIs from
+  [canopy.hx](https://github.com/vitaliikindrat/canopy.hx)
+  (`helix-virtual-text.patch`, `helix-picker.patch`) applied to that build.
+  Without them sap loads, `:sap-changes` and the hunk actions work, the
+  picker falls back to the changes buffer, and the in-place views say what
   is missing.
 - `git` on `PATH`.
 
@@ -67,7 +76,8 @@ Then in `~/.config/helix/init.scm`:
 
 (require (only-in "helix/keymaps.scm" keymap))
 (keymap (global)
-        (normal (space (g (g ":sap-changes")
+        (normal (space (g ":sap-picker")
+                       (v (c ":sap-changes")
                           (d ":sap-toggle")
                           (p ":sap-preview")
                           (s ":sap-stage-hunk")

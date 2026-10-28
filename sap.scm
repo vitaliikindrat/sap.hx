@@ -331,10 +331,17 @@
       [(starts-with? (car lines) "-") (loop (cdr lines) plus (+ minus 1))]
       [else (loop (cdr lines) plus minus)])))
 
-;; The first new-file line the diff touches, to land on.
+;; The first new-file line the diff changes, to land on: the first hunk's
+;; start plus its leading context lines.
 (define (first-changed-line text)
   (let ([hunks (cdr (parse-diff text))])
-    (if (null? hunks) 1 (max 1 (hash-ref (car hunks) 'new-start)))))
+    (if (null? hunks)
+        1
+        (let loop ([lines (hash-ref (car hunks) 'lines)] [line (hash-ref (car hunks) 'new-start)])
+          (cond
+            [(null? lines) (max 1 line)]
+            [(starts-with? (car lines) " ") (loop (cdr lines) (+ line 1))]
+            [else (max 1 line)])))))
 
 ;;@doc
 ;; Changed files in Helix's picker, each previewed as its diff against HEAD;
